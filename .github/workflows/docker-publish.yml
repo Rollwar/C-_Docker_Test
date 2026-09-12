@@ -11,8 +11,6 @@ on:
 
 env:
   REGISTRY_GHCR: ghcr.io
-  IMAGE_NAME_GHCR: ${{ github.repository }}
-  IMAGE_NAME_DOCKERHUB: ${{ secrets.DOCKERHUB_USERNAME }}/csharp-docker-app
 
 jobs:
   build-and-push:
@@ -27,18 +25,43 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      # 2. Set up Docker Buildx
+      # 2. Compute Docker-safe image names
+      #    - lowercase everything
+      #    - collapse any run of [._-] into a single "-"
+      #    - trim leading/trailing separators from each path component
+      - name: Compute Docker-safe image names
+        id: names
+        shell: bash
+        run: |
+          sanitize() {
+            # $1 = raw image path like "owner/repo"
+            echo "$1" \
+              | tr '[:upper:]' '[:lower:]' \
+              | sed -E 's/[._-]+/-/g' \
+              | sed -E 's#(^|/)-+#\1#g; s#-+(/|$)#\1#g'
+          }
+
+          GHCR_IMAGE="$(sanitize "${GITHUB_REPOSITORY}")"
+          DH_IMAGE="$(sanitize "${{ secrets.DOCKERHUB_USERNAME }}/csharp-docker-app")"
+
+          echo "ghcr=$GHCR_IMAGE"     >> "$GITHUB_OUTPUT"
+          echo "dockerhub=$DH_IMAGE"  >> "$GITHUB_OUTPUT"
+
+          echo "GHCR image:      $GHCR_IMAGE"
+          echo "DockerHub image: $DH_IMAGE"
+
+      # 3. Set up Docker Buildx
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
 
-      # 3. Extract metadata for Docker tags and labels
+      # 4. Extract metadata for Docker tags and labels
       - name: Extract Docker metadata
         id: meta
         uses: docker/metadata-action@v5
         with:
           images: |
-            ${{ env.IMAGE_NAME_GHCR }}
-            ${{ env.IMAGE_NAME_DOCKERHUB }}
+            ${{ env.REGISTRY_GHCR }}/${{ steps.names.outputs.ghcr }}
+            ${{ steps.names.outputs.dockerhub }}
           tags: |
             type=ref,event=branch
             type=semver,pattern={{version}}
@@ -46,7 +69,7 @@ jobs:
             type=semver,pattern={{major}}
             type=raw,value=latest,enable={{is_default_branch}}
 
-      # 4. Log in to GitHub Container Registry
+      # 5. Log in to GitHub Container Registry
       - name: Log in to GHCR
         uses: docker/login-action@v3
         with:
@@ -54,14 +77,14 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
-      # 5. Log in to Docker Hub
+      # 6. Log in to Docker Hub
       - name: Log in to Docker Hub
         uses: docker/login-action@v3
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
 
-      # 6. Build and push the Docker image
+      # 7. Build and push the Docker image
       - name: Build and push Docker image
         id: build
         uses: docker/build-push-action@v5
@@ -74,7 +97,7 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
-      # 7. Slack notification on SUCCESS
+      # 8. Slack notification on SUCCESS
       - name: Notify Slack on Success
         if: success()
         uses: slackapi/slack-github-action@v1.27.0
@@ -96,7 +119,7 @@ jobs:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
           SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
 
-      # 8. Slack notification on FAILURE
+      # 9. Slack notification on FAILURE
       - name: Notify Slack on Failure
         if: failure()
         uses: slackapi/slack-github-action@v1.27.0
