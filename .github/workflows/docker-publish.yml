@@ -119,17 +119,15 @@ jobs:
               ]
             };
             fs.writeFileSync('slack-payload.json', JSON.stringify(payload));
-
+      # 9. Notify Slack (success case)
       - name: Notify Slack on Success
         if: success()
-        uses: slackapi/slack-github-action@v2.0.0
+        uses: slackapi/slack-github-action@v2
         with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
           payload-file-path: slack-payload.json
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
-
-      # 9. Build Slack payload dynamically (failure case)
+      # 10. Notify Slack payload (failure case)
       - name: Build Slack payload (failure)
         if: failure()
         id: slack_payload_failure
@@ -150,12 +148,11 @@ jobs:
               ]
             };
             fs.writeFileSync('slack-payload.json', JSON.stringify(payload));
-
+      # 11. Notify Slack on Failure
       - name: Notify Slack on Failure
         if: failure()
-        uses: slackapi/slack-github-action@v2.0.0
+        uses: slackapi/slack-github-action@v2
         with:
+          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
+          webhook-type: incoming-webhook
           payload-file-path: slack-payload.json
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
-          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
